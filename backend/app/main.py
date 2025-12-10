@@ -5,8 +5,7 @@ from app.core.database import engine, Base
 from app.api.endpoints import sales 
 from app.services.seed_db import seed_products
 from app.core.database import SessionLocal
-from app.api.endpoints import sales, technical
-from app.api.endpoints import sales, technical, pricing
+from app.api.endpoints import sales, technical, pricing, main_agent
 
 
 Base.metadata.create_all(bind=engine)
@@ -28,6 +27,8 @@ app.include_router(sales.router, prefix="/api/agents/sales", tags=["Sales Agent"
 app.include_router(technical.router, prefix="/api/agents/technical", tags=["Technical Agent"])
 
 app.include_router(pricing.router, prefix="/api/agents/pricing", tags=["Pricing Agent"])
+
+app.include_router(main_agent.router, prefix="/api/agents/main", tags=["Main Agent"])
 
 @app.on_event("startup")
 def startup_event():
