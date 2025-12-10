@@ -6,6 +6,7 @@ from app.api.endpoints import sales
 from app.services.seed_db import seed_products
 from app.core.database import SessionLocal
 from app.api.endpoints import sales, technical
+from app.api.endpoints import sales, technical, pricing
 
 
 Base.metadata.create_all(bind=engine)
@@ -25,6 +26,8 @@ app.add_middleware(
 # Register Routers
 app.include_router(sales.router, prefix="/api/agents/sales", tags=["Sales Agent"])
 app.include_router(technical.router, prefix="/api/agents/technical", tags=["Technical Agent"])
+
+app.include_router(pricing.router, prefix="/api/agents/pricing", tags=["Pricing Agent"])
 
 @app.on_event("startup")
 def startup_event():
