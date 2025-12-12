@@ -14,7 +14,7 @@ function cn(...inputs) {
 }
 
 // --- API CONFIGURATION ---
-const BASE_URL = 'http://localhost:8000'; // Ensure your Docker/FastAPI is running here
+const BASE_URL = 'http://localhost:8000'; 
 
 const api = {
   // Fetch list of all RFPs
@@ -47,11 +47,19 @@ const api = {
   },
 
   autoPilot: async (id) => {
-    await fetch(`http://localhost:5678/webhook-test/auto-process?id=${id}`, { mode: 'no-cors' });
+    await fetch(`http://localhost:5678/webhook/auto-process?id=${id}`, { mode: 'no-cors' });
+  },
+
+  upload: async (formData) => {
+    const res = await fetch(`${BASE_URL}/api/agents/sales/upload`, {
+      method: 'POST',
+      body: formData, 
+    });
+    if (!res.ok) throw new Error('Upload Failed');
+    return await res.json();
   }
 };
 
-// --- DESIGN COMPONENTS (UNCHANGED THEME) ---
 
 const NeoCard = ({ children, className, delay = 0 }) => (
   <motion.div 
@@ -96,9 +104,9 @@ const StatusChip = ({ status }) => {
   // Matched to Backend Statuses
   const styles = {
     'New': 'bg-blue-200 text-blue-900',
-    'Processed': 'bg-purple-200 text-purple-900',       // After Technical Agent
-    'Pricing Complete': 'bg-orange-200 text-orange-900', // After Pricing Agent
-    'Ready to Submit': 'bg-green-300 text-green-900',    // After Main Agent
+    'Processed': 'bg-purple-200 text-purple-900',      
+    'Pricing Complete': 'bg-orange-200 text-orange-900',
+    'Ready to Submit': 'bg-green-300 text-green-900',    
   };
   return (
     <span className={cn("px-3 py-1 font-bold border-2 border-black text-xs uppercase tracking-tight shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]", styles[status] || 'bg-gray-200')}>
@@ -170,7 +178,6 @@ const Dashboard = () => {
     const data = await api.rfps();
     if(Array.isArray(data)) {
       setRecentRfps(data.slice(0, 4));
-      // Calculate Stats based on real backend statuses
       setStats({
         total: data.length,
         new: data.filter(r => r.status === 'New').length,
@@ -309,7 +316,7 @@ const RfpDetail = () => {
   const [activeTab, setActiveTab] = useState('summary');
   const [rfp, setRfp] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [isPolling, setIsPolling] = useState(false); // Track if we are watching live
+  const [isPolling, setIsPolling] = useState(false); 
 
   // Fetch single RFP details
   const fetchDetails = async () => {
@@ -317,7 +324,6 @@ const RfpDetail = () => {
     const found = all.find(r => r.id === parseInt(id));
     if(found) {
         setRfp(found);
-        // Stop polling if finished
         if(found.status === 'Ready to Submit') setIsPolling(false);
     }
   };
@@ -325,10 +331,8 @@ const RfpDetail = () => {
   // Initial Load
   useEffect(() => { fetchDetails(); }, [id]);
 
-  // 🔄 REAL-TIME POLLING MAGIC
   useEffect(() => {
     let interval;
-    // Poll every 2 seconds if we are in "Polling Mode" OR if status is not final yet
     if (isPolling) {
       interval = setInterval(() => {
         fetchDetails();
@@ -604,7 +608,125 @@ const RfpDetail = () => {
     </div>
   );
 };
-// --- MAIN APP ENTRY ---
+
+
+const UploadPage = () => {
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    title: '',
+    client: '',
+    deadline: '',
+    file: null
+  });
+
+  const handleFileChange = (e) => {
+    if (e.target.files) setFormData({ ...formData, file: e.target.files[0] });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!formData.file || !formData.title) return alert("Please fill all fields");
+
+    setLoading(true);
+    try {
+      // Create FormData for file upload
+      const data = new FormData();
+      data.append('file', formData.file);
+      data.append('title', formData.title);
+      data.append('client', formData.client);
+      data.append('deadline', formData.deadline);
+
+      const res = await api.upload(data);
+      
+      if (res.status === 'success') {
+        alert("✅ Upload Successful! Redirecting to Pipeline...");
+        navigate(`/rfps/${res.rfp_id}`); // Go straight to the detail page to run agents
+      }
+    } catch (err) {
+      alert("Upload Failed. Check console.");
+      console.error(err);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="p-8 bg-slate-100 min-h-screen flex justify-center items-center">
+      <NeoCard className="w-full max-w-2xl">
+        <div className="border-b-4 border-black pb-4 mb-6">
+          <h2 className="text-4xl font-black italic">UPLOAD MANUAL RFP</h2>
+          <p className="font-mono text-gray-500 mt-2">Add offline tenders to the AI Pipeline.</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Title Input */}
+          <div>
+            <label className="block font-bold uppercase mb-2">RFP Title</label>
+            <input 
+              type="text" 
+              required
+              className="w-full border-2 border-black p-3 font-mono focus:outline-none focus:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all"
+              placeholder="e.g. Supply of Industrial Primer - Batch A"
+              value={formData.title}
+              onChange={e => setFormData({...formData, title: e.target.value})}
+            />
+          </div>
+
+          {/* Client & Deadline Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block font-bold uppercase mb-2">Client Name</label>
+              <input 
+                type="text" 
+                required
+                className="w-full border-2 border-black p-3 font-mono focus:outline-none focus:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all"
+                placeholder="e.g. Indian Railways"
+                value={formData.client}
+                onChange={e => setFormData({...formData, client: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block font-bold uppercase mb-2">Deadline</label>
+              <input 
+                type="date" 
+                required
+                className="w-full border-2 border-black p-3 font-mono focus:outline-none focus:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all"
+                value={formData.deadline}
+                onChange={e => setFormData({...formData, deadline: e.target.value})}
+              />
+            </div>
+          </div>
+
+          {/* File Upload Area */}
+          <div className="border-4 border-dashed border-gray-400 p-8 text-center hover:bg-gray-50 transition-colors relative cursor-pointer">
+             <input 
+                type="file" 
+                accept=".pdf"
+                required
+                onChange={handleFileChange}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+             />
+             <Upload className="w-12 h-12 mx-auto text-gray-400 mb-2" />
+             <p className="font-bold text-lg">
+               {formData.file ? formData.file.name : "Click to Upload PDF Document"}
+             </p>
+             <p className="text-xs font-mono text-gray-500 mt-1">MAX SIZE: 10MB</p>
+          </div>
+
+          {/* Submit Button */}
+          <NeoButton 
+            variant="primary" 
+            className="w-full py-4 text-xl" 
+            loading={loading} 
+            icon={CheckCircle}
+          >
+            {loading ? "UPLOADING..." : "UPLOAD & START AI"}
+          </NeoButton>
+        </form>
+      </NeoCard>
+    </div>
+  );
+};
 
 const App = () => {
   return (
@@ -619,7 +741,7 @@ const App = () => {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/rfps" element={<RfpList />} />
               <Route path="/rfps/:id" element={<RfpDetail />} />
-              <Route path="/upload" element={<div className="p-8 text-2xl font-black">MANUAL UPLOAD (Future Scope)</div>} />
+              <Route path="/upload" element={<UploadPage />} />
             </Routes>
           </main>
         </div>

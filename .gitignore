@@ -105,6 +105,8 @@ celerybeat.pid
 *.swo
 *~
 
+data/
+
 # API Keys and Secrets (extra safety)
 *secret*
 *SECRET*
