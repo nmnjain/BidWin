@@ -21,7 +21,21 @@ def generate_proposal_ppt(rfp_id: int, db: Session):
 
     match_data = data["match"]
     pricing_data = data["pricing"]
-    reqs = data.get("requirements", {})
+        
+    raw_reqs = data.get("requirements", {})
+        
+    if isinstance(raw_reqs, list):
+        if len(raw_reqs) > 0 and isinstance(raw_reqs[0], dict):
+            reqs = raw_reqs[0]
+        else:
+            reqs = {
+                    "material_type": ", ".join([str(x) for x in raw_reqs]), 
+                    "dft_requirement": "See detailed specs",
+                    "application_method": "Standard"
+                }
+    else:
+            reqs = raw_reqs
+        
 
     # 2. Create Presentation
     prs = Presentation()

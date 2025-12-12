@@ -1,0 +1,112 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://backend:8000/api/agents/technical/{{$json.query.id}}/analyze",
+        "options": {}
+      },
+      "id": "703799de-5ea4-4cad-b7d7-5d218260d2e7",
+      "name": "1. Technical Agent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://backend:8000/api/agents/pricing/{{$node[\"start\"].json.query.id}}/calculate",
+        "options": {}
+      },
+      "id": "80fd2996-4a1c-4a08-9370-263865b5b827",
+      "name": "2. Pricing Agent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://backend:8000/api/agents/main/{{$node[\"start\"].json.query.id}}/generate-proposal",
+        "options": {}
+      },
+      "id": "80cf54c1-c1fa-4a1b-aeff-a1e4d70fc798",
+      "name": "3. Generate PPT",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        672,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "path": "auto-process",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "fc508804-9fb2-479b-9dda-31dd25532013",
+      "name": "start",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "auto-process-rfp"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "1. Technical Agent": {
+      "main": [
+        [
+          {
+            "node": "2. Pricing Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Pricing Agent": {
+      "main": [
+        [
+          {
+            "node": "3. Generate PPT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "start": {
+      "main": [
+        [
+          {
+            "node": "1. Technical Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "43bd64ed-ef1c-46ae-ad20-4f316dfe7dfc",
+  "meta": {
+    "instanceId": "4bc5aff1478c6acc6a519643a7a4f48cc558e683bcb0ed3be6106fba201c8bba"
+  },
+  "id": "pBRvtwt0HWmFGfJ7",
+  "tags": []
+}

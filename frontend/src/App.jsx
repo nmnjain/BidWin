@@ -44,6 +44,10 @@ const api = {
   generate: async (id) => {
     const res = await fetch(`${BASE_URL}/api/agents/main/${id}/generate-proposal`, { method: 'POST' });
     return await res.json();
+  },
+
+  autoPilot: async (id) => {
+    await fetch(`http://localhost:5678/webhook-test/auto-process?id=${id}`, { mode: 'no-cors' });
   }
 };
 
@@ -305,41 +309,87 @@ const RfpDetail = () => {
   const [activeTab, setActiveTab] = useState('summary');
   const [rfp, setRfp] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isPolling, setIsPolling] = useState(false); // Track if we are watching live
 
   // Fetch single RFP details
   const fetchDetails = async () => {
     const all = await api.rfps();
     const found = all.find(r => r.id === parseInt(id));
-    if(found) setRfp(found);
+    if(found) {
+        setRfp(found);
+        // Stop polling if finished
+        if(found.status === 'Ready to Submit') setIsPolling(false);
+    }
   };
 
+  // Initial Load
   useEffect(() => { fetchDetails(); }, [id]);
 
-  // Handler for Agent Actions
+  // 🔄 REAL-TIME POLLING MAGIC
+  useEffect(() => {
+    let interval;
+    // Poll every 2 seconds if we are in "Polling Mode" OR if status is not final yet
+    if (isPolling) {
+      interval = setInterval(() => {
+        fetchDetails();
+      }, 2000);
+    }
+    return () => clearInterval(interval);
+  }, [isPolling]);
+
+
+  // Handler for Manual Agent Actions
   const runAgent = async (agentType) => {
     setLoading(true);
     try {
       if(agentType === 'technical') await api.analyze(id);
       if(agentType === 'pricing') await api.price(id);
-      if(agentType === 'proposal') {
-        const res = await api.generate(id);
-        if(res.status === 'success') {
-             // If backend returns download_url, we can use it
-             alert("PPT Generated Successfully!");
-        }
-      }
-      await fetchDetails(); // Refresh data to show new state
+      if(agentType === 'proposal') await api.generate(id);
+      await fetchDetails();
     } catch (e) { alert("Agent Operation Failed"); }
     setLoading(false);
   };
 
-  if (!rfp) return <div className="p-8">Loading RFP Details...</div>;
+  const runAutoPilot = async () => {
+    if(!confirm("🚀 Launch n8n Auto-Pilot?")) return;
+    
+    setIsPolling(true); 
+    
+    try {
+      await api.autoPilot(id);
+    } catch (e) { 
+      setIsPolling(false);
+      alert("Failed to trigger n8n"); 
+    }
+  };
 
-  // Derived Data from Extracted JSON
+  if (!rfp) return <div className="p-8 font-mono">Loading RFP Data...</div>;
+
+  // Derived Data
   const extracted = rfp.extracted_data || {};
   const requirements = extracted.requirements || {};
   const match = extracted.match || {};
   const pricing = extracted.pricing || {};
+
+  // Status Progress Logic (0 to 3)
+  const getProgressStep = (status) => {
+      if (status === 'New') return 0;
+      if (status === 'Processed') return 1;
+      if (status === 'Pricing Complete') return 2;
+      if (status === 'Ready to Submit') return 3;
+      return 0;
+  };
+  const currentStep = getProgressStep(rfp.status);
+  const safeRender = (value) => {
+    if (!value) return 'N/A';
+    if (Array.isArray(value)) return value.join(', ');
+    if (typeof value === 'object') {
+      return Object.entries(value)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(' | ');
+    }
+    return value.toString();
+  };
 
   return (
     <div className="p-8 bg-slate-100 min-h-screen">
@@ -350,32 +400,68 @@ const RfpDetail = () => {
              <div className="flex items-center gap-3 mb-2">
                 <Link to="/rfps" className="text-gray-400 hover:text-white"><ChevronRight className="rotate-180 inline" /> Back</Link>
                 <StatusChip status={rfp.status} />
+                {isPolling && <span className="text-xs font-mono text-[#FFD700] animate-pulse">● LIVE AGENT SYNC ACTIVE</span>}
              </div>
              <h1 className="text-3xl font-black mb-1">{rfp.title}</h1>
              <p className="text-xl text-slate-400 font-mono">{rfp.client_name} | ID: {rfp.id}</p>
           </div>
           
-          {/* Main Action Button Logic */}
           <div className="flex flex-col items-end gap-2">
-            {rfp.status === 'New' && (
-                <NeoButton onClick={() => runAgent('technical')} loading={loading} icon={Cpu} variant="dark">Run Tech Analysis</NeoButton>
+            {/* Auto-Pilot Button */}
+            {currentStep < 3 && (
+                <NeoButton 
+                    onClick={runAutoPilot} 
+                    loading={isPolling} 
+                    icon={Zap} 
+                    className="bg-purple-500 hover:bg-purple-600 text-white border-white w-64"
+                >
+                    {isPolling ? "AGENTS RUNNING..." : "RUN AUTO-PILOT"}
+                </NeoButton>
             )}
-            {rfp.status === 'Processed' && (
-                <NeoButton onClick={() => runAgent('pricing')} loading={loading} icon={DollarSign} variant="primary">Generate Pricing</NeoButton>
+
+            {/* Manual Fallback Buttons */}
+            {!isPolling && (
+                <>
+                    {rfp.status === 'New' && <NeoButton onClick={() => runAgent('technical')} loading={loading} icon={Cpu} variant="dark" className="text-sm py-1">Manual: Tech Analysis</NeoButton>}
+                    {rfp.status === 'Processed' && <NeoButton onClick={() => runAgent('pricing')} loading={loading} icon={DollarSign} variant="primary" className="text-sm py-1">Manual: Pricing</NeoButton>}
+                    {rfp.status === 'Pricing Complete' && <NeoButton onClick={() => runAgent('proposal')} loading={loading} icon={FileText} variant="success" className="text-sm py-1">Manual: Proposal</NeoButton>}
+                </>
             )}
-            {rfp.status === 'Pricing Complete' && (
-                <NeoButton onClick={() => runAgent('proposal')} loading={loading} icon={FileText} variant="success">Generate Proposal PPT</NeoButton>
-            )}
+
             {rfp.status === 'Ready to Submit' && (
                  <a href={`http://localhost:8000/api/agents/main/download/proposal_${rfp.id}.pptx`} target="_blank" rel="noreferrer">
-                    <NeoButton icon={Download} variant="secondary">Download PPT</NeoButton>
+                    <NeoButton icon={Download} variant="secondary">Download Final PPT</NeoButton>
                  </a>
             )}
           </div>
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* 🚀 LIVE PIPELINE VISUALIZER */}
+      <div className="mb-8 grid grid-cols-3 gap-4">
+        {[
+            { label: "Technical Analysis", step: 1, icon: Cpu },
+            { label: "Pricing Calc", step: 2, icon: DollarSign },
+            { label: "Proposal Gen", step: 3, icon: FileText }
+        ].map((s) => (
+            <div key={s.step} className={cn(
+                "border-4 border-black p-4 flex items-center gap-4 transition-all duration-500",
+                currentStep >= s.step ? "bg-[#4ade80] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]" : "bg-white opacity-50"
+            )}>
+                <div className={cn("p-2 rounded-full border-2 border-black", currentStep >= s.step ? "bg-white" : "bg-gray-200")}>
+                    <s.icon className="w-6 h-6" />
+                </div>
+                <div>
+                    <span className="font-mono text-xs font-bold uppercase text-gray-600">Step 0{s.step}</span>
+                    <h4 className="font-black text-lg">{s.label}</h4>
+                    {currentStep >= s.step && <span className="text-xs font-bold">COMPLETED ✅</span>}
+                    {currentStep === s.step - 1 && isPolling && <span className="text-xs font-bold animate-pulse">PROCESSING...</span>}
+                </div>
+            </div>
+        ))}
+      </div>
+
+      {/* Tabs Layout */}
       <div className="flex flex-col lg:flex-row gap-8">
         <div className="lg:w-1/4 flex flex-col gap-4">
           {[
@@ -418,17 +504,18 @@ const RfpDetail = () => {
                       <div className="grid grid-cols-1 gap-4">
                         {Object.entries(requirements).map(([k, v]) => (
                           <div key={k} className="bg-slate-50 p-4 border-2 border-black">
-                            <span className="block text-xs font-bold text-gray-500 uppercase mb-1">{k.replace('_', ' ')}</span>
-                            <span className="block text-lg font-bold font-mono">
-                                {Array.isArray(v) ? v.join(', ') : v}
+                            <span className="block text-xs font-bold text-gray-500 uppercase mb-1">{k.replace(/_/g, ' ')}</span>
+                            {/* USE THE HELPER FUNCTION HERE */}
+                            <span className="block text-lg font-bold font-mono break-words">
+                                {safeRender(v)}
                             </span>
                           </div>
                         ))}
                       </div>
                   ) : (
                       <div className="text-center py-10 bg-gray-100 border-2 border-dashed border-gray-400">
-                          <p className="font-bold text-gray-500">No technical analysis run yet.</p>
-                          <p className="text-sm text-gray-400">Click "Run Tech Analysis" to extract data.</p>
+                          <p className="font-bold text-gray-500">Waiting for Technical Analysis...</p>
+                          {isPolling && <RefreshCw className="w-6 h-6 animate-spin mx-auto mt-2 text-gray-400" />}
                       </div>
                   )}
                 </NeoCard>
@@ -457,6 +544,7 @@ const RfpDetail = () => {
                     <div className="text-center py-10">
                         <Cpu className="w-16 h-16 mx-auto text-gray-300 mb-4" />
                         <p className="font-bold text-gray-500">Technical Agent Waiting...</p>
+                        {isPolling && <span className="text-xs text-blue-600 animate-pulse">Agent is thinking...</span>}
                     </div>
                   )}
                 </NeoCard>
@@ -504,6 +592,7 @@ const RfpDetail = () => {
                     <div className="text-center py-10">
                         <DollarSign className="w-16 h-16 mx-auto text-gray-300 mb-4" />
                         <p className="font-bold text-gray-500">Pricing Agent Waiting...</p>
+                        {isPolling && <span className="text-xs text-blue-600 animate-pulse">Pending Technical Match...</span>}
                     </div>
                   )}
                 </NeoCard>
@@ -515,7 +604,6 @@ const RfpDetail = () => {
     </div>
   );
 };
-
 // --- MAIN APP ENTRY ---
 
 const App = () => {
