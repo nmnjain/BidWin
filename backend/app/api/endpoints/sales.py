@@ -75,3 +75,15 @@ def list_rfps(db: Session = Depends(get_db)):
     """
     rfps = db.query(RFP).all()
     return rfps
+
+
+@router.delete("/reset")
+def reset_pipeline(db: Session = Depends(get_db)):
+    
+    try:
+        num_deleted = db.query(RFP).delete()
+        db.commit()
+        return {"status": "success", "deleted_count": num_deleted, "message": "Pipeline cleared"}
+    except Exception as e:
+        db.rollback()
+        return {"error": str(e)}

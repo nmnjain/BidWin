@@ -316,9 +316,9 @@ const RfpDetail = () => {
   const [activeTab, setActiveTab] = useState('summary');
   const [rfp, setRfp] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [isPolling, setIsPolling] = useState(false); 
+  const [isPolling, setIsPolling] = useState(false);
 
-  // Fetch single RFP details
+  // Fetch details
   const fetchDetails = async () => {
     const all = await api.rfps();
     const found = all.find(r => r.id === parseInt(id));
@@ -328,21 +328,18 @@ const RfpDetail = () => {
     }
   };
 
-  // Initial Load
   useEffect(() => { fetchDetails(); }, [id]);
 
+  // Polling Logic
   useEffect(() => {
     let interval;
     if (isPolling) {
-      interval = setInterval(() => {
-        fetchDetails();
-      }, 2000);
+      interval = setInterval(() => fetchDetails(), 2000);
     }
     return () => clearInterval(interval);
   }, [isPolling]);
 
-
-  // Handler for Manual Agent Actions
+  // Agent Handlers
   const runAgent = async (agentType) => {
     setLoading(true);
     try {
@@ -356,26 +353,20 @@ const RfpDetail = () => {
 
   const runAutoPilot = async () => {
     if(!confirm("🚀 Launch n8n Auto-Pilot?")) return;
-    
     setIsPolling(true); 
-    
-    try {
-      await api.autoPilot(id);
-    } catch (e) { 
-      setIsPolling(false);
-      alert("Failed to trigger n8n"); 
-    }
+    try { await api.autoPilot(id); } 
+    catch (e) { setIsPolling(false); alert("Failed to trigger n8n"); }
   };
 
-  if (!rfp) return <div className="p-8 font-mono">Loading RFP Data...</div>;
+  if (!rfp) return <div className="p-8 font-mono">Loading...</div>;
 
-  // Derived Data
   const extracted = rfp.extracted_data || {};
-  const requirements = extracted.requirements || {};
-  const match = extracted.match || {};
-  const pricing = extracted.pricing || {};
+  
+  const isMultiSku = Array.isArray(extracted.line_items);
+  
+  const lineItems = isMultiSku ? extracted.line_items : [];
+  const commercial = extracted.commercial || {};
 
-  // Status Progress Logic (0 to 3)
   const getProgressStep = (status) => {
       if (status === 'New') return 0;
       if (status === 'Processed') return 1;
@@ -384,16 +375,6 @@ const RfpDetail = () => {
       return 0;
   };
   const currentStep = getProgressStep(rfp.status);
-  const safeRender = (value) => {
-    if (!value) return 'N/A';
-    if (Array.isArray(value)) return value.join(', ');
-    if (typeof value === 'object') {
-      return Object.entries(value)
-        .map(([k, v]) => `${k}: ${v}`)
-        .join(' | ');
-    }
-    return value.toString();
-  };
 
   return (
     <div className="p-8 bg-slate-100 min-h-screen">
@@ -404,7 +385,7 @@ const RfpDetail = () => {
              <div className="flex items-center gap-3 mb-2">
                 <Link to="/rfps" className="text-gray-400 hover:text-white"><ChevronRight className="rotate-180 inline" /> Back</Link>
                 <StatusChip status={rfp.status} />
-                {isPolling && <span className="text-xs font-mono text-[#FFD700] animate-pulse">● LIVE AGENT SYNC ACTIVE</span>}
+                {isPolling && <span className="text-xs font-mono text-[#FFD700] animate-pulse">● LIVE SYNC</span>}
              </div>
              <h1 className="text-3xl font-black mb-1">{rfp.title}</h1>
              <p className="text-xl text-slate-400 font-mono">{rfp.client_name} | ID: {rfp.id}</p>
@@ -413,194 +394,175 @@ const RfpDetail = () => {
           <div className="flex flex-col items-end gap-2">
             {/* Auto-Pilot Button */}
             {currentStep < 3 && (
-                <NeoButton 
-                    onClick={runAutoPilot} 
-                    loading={isPolling} 
-                    icon={Zap} 
-                    className="bg-purple-500 hover:bg-purple-600 text-white border-white w-64"
-                >
+                <NeoButton onClick={runAutoPilot} loading={isPolling} icon={Zap} className="bg-purple-500 hover:bg-purple-600 text-white border-white w-64">
                     {isPolling ? "AGENTS RUNNING..." : "RUN AUTO-PILOT"}
                 </NeoButton>
             )}
-
-            {/* Manual Fallback Buttons */}
+            
+            {/* Manual Buttons */}
             {!isPolling && (
-                <>
-                    {rfp.status === 'New' && <NeoButton onClick={() => runAgent('technical')} loading={loading} icon={Cpu} variant="dark" className="text-sm py-1">Manual: Tech Analysis</NeoButton>}
-                    {rfp.status === 'Processed' && <NeoButton onClick={() => runAgent('pricing')} loading={loading} icon={DollarSign} variant="primary" className="text-sm py-1">Manual: Pricing</NeoButton>}
-                    {rfp.status === 'Pricing Complete' && <NeoButton onClick={() => runAgent('proposal')} loading={loading} icon={FileText} variant="success" className="text-sm py-1">Manual: Proposal</NeoButton>}
-                </>
+                <div className="flex gap-2">
+                    {rfp.status === 'New' && <NeoButton onClick={() => runAgent('technical')} loading={loading} icon={Cpu} variant="dark" className="text-sm py-1">Analyze</NeoButton>}
+                    {rfp.status === 'Processed' && <NeoButton onClick={() => runAgent('pricing')} loading={loading} icon={DollarSign} variant="primary" className="text-sm py-1">Pricing</NeoButton>}
+                    {rfp.status === 'Pricing Complete' && <NeoButton onClick={() => runAgent('proposal')} loading={loading} icon={FileText} variant="success" className="text-sm py-1">Proposal</NeoButton>}
+                </div>
             )}
 
             {rfp.status === 'Ready to Submit' && (
                  <a href={`http://localhost:8000/api/agents/main/download/proposal_${rfp.id}.pptx`} target="_blank" rel="noreferrer">
-                    <NeoButton icon={Download} variant="secondary">Download Final PPT</NeoButton>
+                    <NeoButton icon={Download} variant="secondary">Download PPT</NeoButton>
                  </a>
             )}
           </div>
         </div>
       </div>
 
-      {/* 🚀 LIVE PIPELINE VISUALIZER */}
+      {/* Progress Bar */}
       <div className="mb-8 grid grid-cols-3 gap-4">
         {[
-            { label: "Technical Analysis", step: 1, icon: Cpu },
+            { label: "Technical Ensemble", step: 1, icon: Cpu },
             { label: "Pricing Calc", step: 2, icon: DollarSign },
             { label: "Proposal Gen", step: 3, icon: FileText }
         ].map((s) => (
-            <div key={s.step} className={cn(
-                "border-4 border-black p-4 flex items-center gap-4 transition-all duration-500",
-                currentStep >= s.step ? "bg-[#4ade80] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]" : "bg-white opacity-50"
-            )}>
-                <div className={cn("p-2 rounded-full border-2 border-black", currentStep >= s.step ? "bg-white" : "bg-gray-200")}>
-                    <s.icon className="w-6 h-6" />
-                </div>
-                <div>
-                    <span className="font-mono text-xs font-bold uppercase text-gray-600">Step 0{s.step}</span>
-                    <h4 className="font-black text-lg">{s.label}</h4>
-                    {currentStep >= s.step && <span className="text-xs font-bold">COMPLETED ✅</span>}
-                    {currentStep === s.step - 1 && isPolling && <span className="text-xs font-bold animate-pulse">PROCESSING...</span>}
-                </div>
+            <div key={s.step} className={cn("border-4 border-black p-4 flex items-center gap-4", currentStep >= s.step ? "bg-[#4ade80]" : "bg-white opacity-50")}>
+                <s.icon className="w-6 h-6" />
+                <span className="font-black uppercase">{s.label}</span>
             </div>
         ))}
       </div>
 
-      {/* Tabs Layout */}
+      {/* Tabs */}
       <div className="flex flex-col lg:flex-row gap-8">
         <div className="lg:w-1/4 flex flex-col gap-4">
           {[
-            { id: 'summary', label: 'Overview', icon: FileText },
-            { id: 'technical', label: 'Technical Match', icon: Layers },
-            { id: 'pricing', label: 'Pricing Quote', icon: DollarSign },
+            { id: 'summary', label: 'Overview (BoQ)', icon: FileText },
+            { id: 'technical', label: 'Ensemble Match', icon: Layers },
+            { id: 'pricing', label: 'Commercials', icon: DollarSign },
           ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                "flex items-center gap-3 p-4 border-4 border-black font-black text-lg transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]",
-                activeTab === tab.id ? "bg-[#FFD700] translate-x-1" : "bg-white hover:bg-gray-50"
-              )}
-            >
-              <tab.icon className="w-6 h-6" />
-              {tab.label}
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={cn("flex items-center gap-3 p-4 border-4 border-black font-black text-lg transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]", activeTab === tab.id ? "bg-[#FFD700] translate-x-1" : "bg-white hover:bg-gray-50")}>
+              <tab.icon className="w-6 h-6" /> {tab.label}
             </button>
           ))}
         </div>
 
         <div className="lg:w-3/4">
           <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.2 }}
-            >
-              {/* === TAB 1: OVERVIEW === */}
+            <motion.div key={activeTab} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }}>
+              
+              {/* === TAB 1: OVERVIEW (BoQ) === */}
               {activeTab === 'summary' && (
                 <NeoCard>
-                    <div className="flex justify-between items-center border-b-4 border-black pb-2 mb-4">
-                        <h3 className="text-2xl font-black">AI Extracted Requirements</h3>
-                        <span className="text-xs font-mono bg-gray-200 px-2 py-1">Source: {rfp.file_url.split('/').pop()}</span>
+                    <div className="border-b-4 border-black pb-2 mb-4">
+                        <h3 className="text-2xl font-black">Extracted Bill of Quantities</h3>
+                        <p className="font-mono text-sm text-gray-500">AI identified {lineItems.length} distinct line items.</p>
                     </div>
-                  
-                  {Object.keys(requirements).length > 0 ? (
-                      <div className="grid grid-cols-1 gap-4">
-                        {Object.entries(requirements).map(([k, v]) => (
-                          <div key={k} className="bg-slate-50 p-4 border-2 border-black">
-                            <span className="block text-xs font-bold text-gray-500 uppercase mb-1">{k.replace(/_/g, ' ')}</span>
-                            {/* USE THE HELPER FUNCTION HERE */}
-                            <span className="block text-lg font-bold font-mono break-words">
-                                {safeRender(v)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                  ) : (
-                      <div className="text-center py-10 bg-gray-100 border-2 border-dashed border-gray-400">
-                          <p className="font-bold text-gray-500">Waiting for Technical Analysis...</p>
-                          {isPolling && <RefreshCw className="w-6 h-6 animate-spin mx-auto mt-2 text-gray-400" />}
-                      </div>
-                  )}
+                    {lineItems.length > 0 ? (
+                        <div className="space-y-4">
+                            {lineItems.map((item, idx) => (
+                                <div key={idx} className="bg-slate-50 p-4 border-2 border-black flex justify-between items-center">
+                                    <div>
+                                        <span className="font-bold text-xs bg-black text-white px-2 py-1 rounded">ITEM #{idx+1}</span>
+                                        <h4 className="font-black text-lg mt-1">{item.requirement.item_name}</h4>
+                                        <p className="font-mono text-sm text-gray-600">{item.requirement.specs}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="block text-xs font-bold text-gray-500">QTY</span>
+                                        <span className="block text-xl font-black">{item.requirement.quantity || "1"}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : <div className="text-center py-10 font-bold text-gray-400">No items extracted yet. Run Analysis.</div>}
                 </NeoCard>
               )}
 
-              {/* === TAB 2: TECHNICAL === */}
+              {/* === TAB 2: TECHNICAL (Ensemble) === */}
               {activeTab === 'technical' && (
                 <NeoCard>
-                  <h3 className="text-2xl font-black border-b-4 border-black pb-2 mb-6">Product Matching</h3>
-                  {match.product_id ? (
+                  <h3 className="text-2xl font-black border-b-4 border-black pb-2 mb-6">Ensemble Decision Engine</h3>
+                  {lineItems.length > 0 && lineItems[0].match ? (
                       <div className="space-y-6">
-                          <div className="flex items-center gap-4 bg-green-100 p-6 border-2 border-black">
-                              <CheckCircle className="text-green-600 w-12 h-12" />
-                              <div>
-                                  <h4 className="font-black text-xl">Match Found: Product ID {match.product_id}</h4>
-                                  <p className="font-mono text-sm">Confidence Score: <b>{match.match_score}%</b></p>
-                              </div>
-                          </div>
-                          
-                          <div className="bg-slate-50 p-6 border-2 border-black">
-                              <h5 className="font-black uppercase mb-2">AI Reasoning</h5>
-                              <p className="font-mono text-sm leading-relaxed">{match.reason}</p>
-                          </div>
+                          {lineItems.map((item, idx) => {
+                              const match = item.match || {};
+                              const scores = match.scores || {};
+                              return (
+                                <div key={idx} className="border-2 border-black p-4 bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div>
+                                            <h4 className="font-black text-xl">{match.product_name}</h4>
+                                            <p className="text-sm font-mono text-gray-500">Matched to: {item.requirement.item_name}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="block text-3xl font-black text-green-600">{scores.ensemble}%</span>
+                                            <span className="text-xs font-bold uppercase">Confidence</span>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Score Breakdown Bar */}
+                                    <div className="grid grid-cols-3 gap-2 mb-4">
+                                        <div className="bg-blue-50 p-2 border border-blue-200 text-center">
+                                            <span className="block text-xs font-bold text-blue-800">SEMANTIC</span>
+                                            <span className="block font-black text-lg">{scores.semantic || 0}</span>
+                                        </div>
+                                        <div className="bg-purple-50 p-2 border border-purple-200 text-center">
+                                            <span className="block text-xs font-bold text-purple-800">KEYWORD</span>
+                                            <span className="block font-black text-lg">{scores.keyword || 0}</span>
+                                        </div>
+                                        <div className="bg-orange-50 p-2 border border-orange-200 text-center">
+                                            <span className="block text-xs font-bold text-orange-800">RULE</span>
+                                            <span className="block font-black text-lg">{scores.rule || 0}</span>
+                                        </div>
+                                    </div>
+                                    <p className="text-sm bg-gray-100 p-2 border border-gray-300 font-mono italic">" {match.reason} "</p>
+                                </div>
+                              );
+                          })}
                       </div>
-                  ) : (
-                    <div className="text-center py-10">
-                        <Cpu className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-                        <p className="font-bold text-gray-500">Technical Agent Waiting...</p>
-                        {isPolling && <span className="text-xs text-blue-600 animate-pulse">Agent is thinking...</span>}
-                    </div>
-                  )}
+                  ) : <div className="text-center py-10 font-bold text-gray-400">Waiting for Engine...</div>}
                 </NeoCard>
               )}
 
-              {/* === TAB 3: PRICING === */}
+              {/* === TAB 3: PRICING (Invoice) === */}
               {activeTab === 'pricing' && (
                 <NeoCard>
-                  <h3 className="text-2xl font-black border-b-4 border-black pb-2 mb-6">Commercial Proposal</h3>
-                  {pricing.final_unit_price ? (
+                  <h3 className="text-2xl font-black border-b-4 border-black pb-2 mb-6">Commercial Quote</h3>
+                  {commercial.lines ? (
                       <div>
-                          <div className="flex justify-between items-center bg-[#FFD700] p-6 border-4 border-black mb-6">
-                              <span className="font-black text-xl">FINAL UNIT PRICE</span>
-                              <span className="font-black text-4xl">₹ {pricing.final_unit_price}</span>
+                          <div className="overflow-x-auto">
+                              <table className="w-full border-2 border-black text-sm">
+                                  <thead className="bg-black text-white">
+                                      <tr>
+                                          <th className="p-3 text-left">Item</th>
+                                          <th className="p-3 text-left">Matched SKU</th>
+                                          <th className="p-3 text-right">Qty</th>
+                                          <th className="p-3 text-right">Unit Price</th>
+                                          <th className="p-3 text-right">Line Total (Inc. Tax)</th>
+                                      </tr>
+                                  </thead>
+                                  <tbody>
+                                      {commercial.lines.map((line, i) => (
+                                          <tr key={i} className="border-b border-gray-300">
+                                              <td className="p-3 font-bold">{line.item_name}</td>
+                                              <td className="p-3 font-mono text-gray-600">{line.sku}</td>
+                                              <td className="p-3 text-right">{line.qty}</td>
+                                              <td className="p-3 text-right">₹ {line.unit_price}</td>
+                                              <td className="p-3 text-right font-bold">₹ {line.line_total}</td>
+                                          </tr>
+                                      ))}
+                                  </tbody>
+                              </table>
                           </div>
-
-                          <table className="w-full border-2 border-black">
-                              <thead className="bg-black text-white">
-                                  <tr>
-                                      <th className="p-3 text-left">Component</th>
-                                      <th className="p-3 text-right">Cost (INR)</th>
-                                  </tr>
-                              </thead>
-                              <tbody className="font-mono text-sm">
-                                  <tr className="border-b border-gray-300">
-                                      <td className="p-3">Base Price ({pricing.sku})</td>
-                                      <td className="p-3 text-right">{pricing.components?.base_price}</td>
-                                  </tr>
-                                  <tr className="border-b border-gray-300 bg-gray-50">
-                                      <td className="p-3">Logistics (5%)</td>
-                                      <td className="p-3 text-right">{pricing.components?.logistics_5_percent}</td>
-                                  </tr>
-                                  <tr className="border-b border-gray-300 bg-gray-50">
-                                      <td className="p-3">Margin (20%)</td>
-                                      <td className="p-3 text-right">{pricing.components?.margin_20_percent}</td>
-                                  </tr>
-                                  <tr className="border-b border-gray-300">
-                                      <td className="p-3">GST (18%)</td>
-                                      <td className="p-3 text-right">{pricing.components?.gst_18_percent}</td>
-                                  </tr>
-                              </tbody>
-                          </table>
+                          <div className="flex justify-end mt-6">
+                              <div className="bg-[#FFD700] p-6 border-4 border-black text-right">
+                                  <span className="block text-sm font-bold uppercase">Grand Total (INR)</span>
+                                  <span className="block text-4xl font-black">₹ {commercial.grand_total_inr}</span>
+                              </div>
+                          </div>
                       </div>
-                  ) : (
-                    <div className="text-center py-10">
-                        <DollarSign className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-                        <p className="font-bold text-gray-500">Pricing Agent Waiting...</p>
-                        {isPolling && <span className="text-xs text-blue-600 animate-pulse">Pending Technical Match...</span>}
-                    </div>
-                  )}
+                  ) : <div className="text-center py-10 font-bold text-gray-400">Waiting for Pricing Agent...</div>}
                 </NeoCard>
               )}
+
             </motion.div>
           </AnimatePresence>
         </div>
