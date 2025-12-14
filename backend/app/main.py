@@ -8,6 +8,7 @@ from app.core.database import SessionLocal
 from app.api.endpoints import sales, technical, pricing, main_agent
 
 
+
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title=settings.PROJECT_NAME)

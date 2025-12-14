@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate,
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, Settings, FileText, CheckCircle, Upload, Zap, BarChart3, Download, RefreshCw, ChevronRight,
-  DollarSign, Layers, Cpu, ArrowRight
+  DollarSign, Layers, Cpu, ArrowRight, MessageSquare
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -49,6 +49,16 @@ const api = {
   autoPilot: async (id) => {
     await fetch(`http://localhost:5678/webhook/auto-process?id=${id}`, { mode: 'no-cors' });
   },
+
+   chat: async (id, question) => {
+    const res = await fetch(`${BASE_URL}/api/agents/main/${id}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question })
+    });
+    return await res.json();
+  },
+
 
   upload: async (formData) => {
     const res = await fetch(`${BASE_URL}/api/agents/sales/upload`, {
@@ -318,6 +328,31 @@ const RfpDetail = () => {
   const [loading, setLoading] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
 
+  const [chatHistory, setChatHistory] = useState([
+    { role: 'bot', text: 'Hello! I have analyzed this tender. Ask me about specs, pricing, or clauses.' }
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+
+  const handleSendChat = async () => {
+    if (!chatInput.trim()) return;
+    
+    // Add User Message
+    const userMsg = { role: 'user', text: chatInput };
+    setChatHistory(prev => [...prev, userMsg]);
+    setChatInput('');
+    setChatLoading(true);
+
+    try {
+      const res = await api.chat(id, userMsg.text);
+      // Add Bot Message
+      setChatHistory(prev => [...prev, { role: 'bot', text: res.response || "Sorry, I couldn't process that." }]);
+    } catch (e) {
+      setChatHistory(prev => [...prev, { role: 'bot', text: "Error connecting to AI." }]);
+    }
+    setChatLoading(false);
+  };
+
   // Fetch details
   const fetchDetails = async () => {
     const all = await api.rfps();
@@ -438,6 +473,7 @@ const RfpDetail = () => {
             { id: 'summary', label: 'Overview (BoQ)', icon: FileText },
             { id: 'technical', label: 'Ensemble Match', icon: Layers },
             { id: 'pricing', label: 'Commercials', icon: DollarSign },
+            { id: 'chat', label: 'AI Assistant', icon: MessageSquare },
           ].map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={cn("flex items-center gap-3 p-4 border-4 border-black font-black text-lg transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]", activeTab === tab.id ? "bg-[#FFD700] translate-x-1" : "bg-white hover:bg-gray-50")}>
               <tab.icon className="w-6 h-6" /> {tab.label}
@@ -560,6 +596,55 @@ const RfpDetail = () => {
                           </div>
                       </div>
                   ) : <div className="text-center py-10 font-bold text-gray-400">Waiting for Pricing Agent...</div>}
+                </NeoCard>
+              )}
+              {/* === TAB 4: CHAT ASSISTANT === */}
+              {activeTab === 'chat' && (
+                <NeoCard className="h-[600px] flex flex-col">
+                  <div className="border-b-4 border-black pb-4 mb-4">
+                    <h3 className="text-2xl font-black flex items-center gap-2">
+                        <Zap className="text-[#FFD700] fill-current" /> 
+                        Chat with RFP
+                    </h3>
+                    <p className="font-mono text-sm text-gray-500">Ask questions about the PDF or our Pricing Analysis.</p>
+                  </div>
+
+                  {/* Chat History Area */}
+                  <div className="flex-1 overflow-y-auto space-y-4 p-4 bg-slate-50 border-2 border-black mb-4">
+                    {chatHistory.map((msg, idx) => (
+                      <div key={idx} className={cn("flex", msg.role === 'user' ? "justify-end" : "justify-start")}>
+                        <div className={cn(
+                          "max-w-[80%] p-3 font-mono text-sm border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]",
+                          msg.role === 'user' ? "bg-[#FFD700] text-black" : "bg-white text-gray-800"
+                        )}>
+                          <strong>{msg.role === 'user' ? 'You' : 'BidWin AI'}:</strong>
+                          <p className="mt-1 whitespace-pre-wrap">{msg.text}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {chatLoading && (
+                      <div className="flex justify-start">
+                        <div className="bg-white p-3 border-2 border-black font-mono text-sm text-gray-500 animate-pulse">
+                          Thinking...
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Input Area */}
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      className="flex-1 border-4 border-black p-3 font-mono focus:outline-none"
+                      placeholder="e.g., What is the penalty for late delivery?"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleSendChat()}
+                    />
+                    <NeoButton onClick={handleSendChat} disabled={chatLoading} icon={ArrowRight} variant="dark">
+                      SEND
+                    </NeoButton>
+                  </div>
                 </NeoCard>
               )}
 

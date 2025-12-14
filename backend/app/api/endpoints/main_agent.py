@@ -5,6 +5,13 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.services.proposal_service import generate_proposal_ppt, OUTPUT_DIR
 
+
+from pydantic import BaseModel
+from app.services.chat_service import chat_with_rfp
+
+class ChatRequest(BaseModel):
+    question: str
+
 router = APIRouter()
 
 @router.post("/{rfp_id}/generate-proposal")
@@ -29,3 +36,11 @@ def download_proposal(filename: str):
         filename=filename,
         media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation"
     )
+
+@router.post("/{rfp_id}/chat")
+def ask_rfp_question(rfp_id: int, request: ChatRequest, db: Session = Depends(get_db)):
+    """
+    Chat with the specific RFP using RAG + Structured Data.
+    """
+    result = chat_with_rfp(rfp_id, request.question, db)
+    return result
