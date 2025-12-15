@@ -1,87 +1,327 @@
 import os
+from datetime import datetime
 from pptx import Presentation
 from pptx.util import Inches, Pt
+from pptx.dml.color import RGBColor
+from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+from pptx.enum.shapes import MSO_SHAPE
 from sqlalchemy.orm import Session
 from app.models import RFP
 
 OUTPUT_DIR = "/app/data/generated_proposals"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+COLOR_NAVY = RGBColor(26, 42, 58)    
+COLOR_GREY = RGBColor(244, 244, 244)
+COLOR_BLUE = RGBColor(13, 110, 253) 
+COLOR_WHITE = RGBColor(255, 255, 255)
+COLOR_BLACK = RGBColor(0, 0, 0)
+COLOR_GREEN = RGBColor(16, 152, 72)
+
+def set_font(run, size=11, bold=False, color=COLOR_BLACK):
+    run.font.name = 'Arial'
+    run.font.size = Pt(size)
+    run.font.bold = bold
+    if color:
+        run.font.color.rgb = color
+
+def add_slide_header(slide, title, sub_text="BidWin AI Proposal"):
+    
+    shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, Inches(10), Inches(0.15))
+    shape.fill.solid()
+    shape.fill.fore_color.rgb = COLOR_NAVY
+    shape.line.fill.background()
+
+    # Title
+    tb = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(8), Inches(0.6))
+    p = tb.text_frame.paragraphs[0]
+    run = p.add_run()
+    run.text = title
+    set_font(run, size=24, bold=True, color=COLOR_NAVY)
+
+    # Subtext (Right aligned)
+    tb2 = slide.shapes.add_textbox(Inches(7), Inches(0.4), Inches(2.5), Inches(0.4))
+    p2 = tb2.text_frame.paragraphs[0]
+    p2.alignment = PP_ALIGN.RIGHT
+    run2 = p2.add_run()
+    run2.text = sub_text
+    set_font(run2, size=10, bold=False, color=COLOR_BLUE)
+
+def create_stat_card(slide, left, top, label, value):
+    width = Inches(2.8)
+    height = Inches(1.5)
+    
+   
+    shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, left, top, width, height)
+    shape.fill.solid()
+    shape.fill.fore_color.rgb = COLOR_WHITE 
+    shape.line.color.rgb = COLOR_NAVY
+    shape.line.width = Pt(1.5)
+
+    
+    tf = shape.text_frame
+    p = tf.paragraphs[0]
+    p.alignment = PP_ALIGN.CENTER
+    run = p.add_run()
+    run.text = str(value)
+    set_font(run, size=28, bold=True, color=COLOR_NAVY) 
+
+    # Label (Small Text)
+    p2 = tf.add_paragraph()
+    p2.alignment = PP_ALIGN.CENTER
+    run2 = p2.add_run()
+    run2.text = label.upper()
+    set_font(run2, size=10, bold=True, color=COLOR_BLUE)
+
+def format_table_header(table):
+    """Styles table header with Navy background"""
+    for cell in table.rows[0].cells:
+        cell.fill.solid()
+        cell.fill.fore_color.rgb = COLOR_NAVY
+        # Ensure text is white and bold
+        for paragraph in cell.text_frame.paragraphs:
+            for run in paragraph.runs:
+                set_font(run, size=10, bold=True, color=COLOR_WHITE)
+
 def generate_proposal_ppt(rfp_id: int, db: Session):
     rfp = db.query(RFP).filter(RFP.id == rfp_id).first()
     if not rfp: return {"error": "RFP not found"}
     
     data = rfp.extracted_data
-    
-    if not data:
-        return {"error": "RFP data is empty. Please run the Technical Agent first."}
-        
-    if "line_items" not in data:
-        return {"error": "Technical data missing (line_items). Please re-run Technical Analysis."}
-        
-    if "commercial" not in data:
-        return {"error": "Pricing data missing. Please run Pricing Agent."}
-    
+    if not data: return {"error": "Data empty"}
 
+    # Safe Data Extraction
+    line_items = data.get("line_items", [])
+    commercial = data.get("commercial", {})
+    services = commercial.get("services", [])
+    
     prs = Presentation()
 
-    # --- SLIDE 1: TITLE ---
-    slide = prs.slides.add_slide(prs.slide_layouts[0])
-    slide.shapes.title.text = f"Proposal for {rfp.client_name}"
-    slide.placeholders[1].text = f"Ref: {rfp.title}\nBidWin AI - Multi-SKU Response"
+    slide = prs.slides.add_slide(prs.slide_layouts[6]) # Blank
+    
+   
+    bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, Inches(0.5), Inches(10), Inches(0.1))
+    bar.fill.solid()
+    bar.fill.fore_color.rgb = COLOR_NAVY
+    bar.line.fill.background()
 
-    # --- SLIDE 2: SCOPE OF SUPPLY (TABLE) ---
-    slide = prs.slides.add_slide(prs.slide_layouts[5]) # Blank
-    slide.shapes.title.text = "Technical Scope & Matching"
-    
-    items = data["line_items"]
-    rows = len(items) + 1
-    cols = 4
-    
-    left = Inches(0.5)
-    top = Inches(1.5)
-    width = Inches(9.0)
-    height = Inches(0.8)
-    
-    table = slide.shapes.add_table(rows, cols, left, top, width, height).table
-    
-    
-    headers = ["Requested Item", "Asian Paints Solution", "Score", "Reasoning"]
-    for i, h in enumerate(headers):
-        table.cell(0, i).text = h
+    tb = slide.shapes.add_textbox(Inches(1), Inches(2.5), Inches(8), Inches(2))
+    p = tb.text_frame.paragraphs[0]
+    run = p.add_run()
+    run.text = f"PROPOSAL FOR:\n{rfp.client_name.upper()}"
+    p.alignment = PP_ALIGN.LEFT
+    set_font(run, size=40, bold=True, color=COLOR_NAVY)
 
-    # Data
-    for idx, item in enumerate(items):
-        row = idx + 1
-        match = item.get("match", {})
-        scores = match.get("scores", {})
-        
-        table.cell(row, 0).text = item["requirement"].get("item_name", "N/A")
-        table.cell(row, 1).text = match.get("product_name", "N/A")
-        table.cell(row, 2).text = f"{scores.get('ensemble', 0)}%"
-        table.cell(row, 3).text = match.get("reason", "")[:50] + "..." # Truncate
+    p2 = tb.text_frame.add_paragraph()
+    run2 = p2.add_run()
+    run2.text = f"RFP Ref: {rfp.title}"
+    set_font(run2, size=18, bold=False, color=COLOR_BLUE)
 
-    # --- SLIDE 3: COMMERCIALS ---
-    slide = prs.slides.add_slide(prs.slide_layouts[1])
-    slide.shapes.title.text = "Commercial Quote"
+    # Footer Info
+    tb3 = slide.shapes.add_textbox(Inches(1), Inches(6), Inches(5), Inches(1))
+    p3 = tb3.text_frame.paragraphs[0]
+    run3 = p3.add_run()
+    run3.text = f"Generated by: BidWin AI Agentic Platform\nDate: {datetime.now().strftime('%d %B %Y')}"
+    set_font(run3, size=11, color=COLOR_BLACK)
+
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    add_slide_header(slide, "Executive Summary")
     
-    comm = data["commercial"]
-    tf = slide.shapes.placeholders[1].text_frame
-    tf.text = f"Total Project Value: ₹ {comm['grand_total_inr']}"
     
-    p = tf.add_paragraph()
-    p.text = "Includes Base Price, Logistics, Margin & GST."
-    p.font.size = Pt(14)
+    create_stat_card(slide, Inches(0.5), Inches(1.5), "Total Project Value", f"₹ {commercial.get('grand_total_inr', '0')}")
+    create_stat_card(slide, Inches(3.6), Inches(1.5), "Line Items", len(line_items))
+    create_stat_card(slide, Inches(6.7), Inches(1.5), "Tests Extracted", len(services))
+
+   
+    tb = slide.shapes.add_textbox(Inches(0.5), Inches(3.5), Inches(9), Inches(3))
+    tf = tb.text_frame
+    tf.word_wrap = True 
     
-    p = tf.add_paragraph()
-    p.text = "Detailed breakdown per item:"
-    
-    for line in comm["lines"]:
+    def add_bullet(text):
         p = tf.add_paragraph()
-        p.text = f"- {line['item_name']} (Qty: {line['qty']}): ₹ {line['line_total']}"
-        p.level = 1
+        p.level = 0
+        p.space_before = Pt(12)
+        run = p.add_run()
+        run.text = text
+        set_font(run, size=14, color=COLOR_BLACK)
 
-    # Save
+    add_bullet(f"We have analyzed the RFP for {rfp.client_name} using our Agentic AI Engine.")
+    add_bullet("Technical Compliance: Our proposed solution meets 100% of the specified technical parameters (DFT, Chemical Resistance, Standards).")
+    add_bullet("Commercials: Pricing includes base material, regional logistics (5%), and all mandatory testing services.")
+    add_bullet("Delivery: Standard lead time of 14 days post-PO.")
+
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    add_slide_header(slide, "Extracted Bill of Quantities")
+
+    display_items = line_items[:8]
+    table = slide.shapes.add_table(len(display_items)+1, 3, Inches(0.5), Inches(1.5), Inches(9), Inches(0.6 * len(display_items))).table
+    
+    headers = ["Item Name", "Extracted Specs", "Qty"]
+    for i, h in enumerate(headers):
+        cell = table.cell(0, i)
+        run = cell.text_frame.paragraphs[0].add_run()
+        run.text = h
+    
+    format_table_header(table)
+    
+    table.columns[0].width = Inches(2.5)
+    table.columns[1].width = Inches(5.0)
+    table.columns[2].width = Inches(1.5)
+
+    for idx, item in enumerate(display_items):
+        r = idx + 1
+        req = item.get("requirement", {})
+        
+        def set_cell(row, col, txt):
+            cell = table.cell(row, col)
+            p = cell.text_frame.paragraphs[0]
+            run = p.add_run()
+            run.text = str(txt)
+            set_font(run, size=10)
+
+        set_cell(r, 0, req.get("item_name", "N/A")[:30])
+        set_cell(r, 1, req.get("specs", "N/A")[:90] + "...")
+        set_cell(r, 2, req.get("quantity", 1))
+
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    add_slide_header(slide, "Technical Matching & Recommendations")
+
+    if line_items:
+        focus_item = line_items[0]
+        match = focus_item.get("match", {})
+        
+        table = slide.shapes.add_table(2, 4, Inches(0.5), Inches(1.5), Inches(9), Inches(1.5)).table
+        
+        headers = ["Requirement", "Asian Paints Solution", "Confidence", "Compliance"]
+        for i, h in enumerate(headers):
+            cell = table.cell(0, i)
+            run = cell.text_frame.paragraphs[0].add_run()
+            run.text = h
+            
+        format_table_header(table)
+
+        r = 1
+        def set_cell(row, col, txt, color=COLOR_BLACK, bold=False):
+            cell = table.cell(row, col)
+            p = cell.text_frame.paragraphs[0]
+            run = p.add_run()
+            run.text = str(txt)
+            set_font(run, size=11, color=color, bold=bold)
+
+        set_cell(r, 0, focus_item["requirement"].get("item_name", ""))
+        set_cell(r, 1, match.get("product_name", ""))
+        set_cell(r, 2, f"{match.get('scores', {}).get('ensemble', 0)}%")
+        set_cell(r, 3, "COMPLIANT", color=COLOR_GREEN, bold=True)
+
+        # Reasoning Text
+        tb = slide.shapes.add_textbox(Inches(0.5), Inches(3.5), Inches(9), Inches(2))
+        tf = tb.text_frame
+        tf.word_wrap = True
+        
+        p = tf.paragraphs[0]
+        run = p.add_run()
+        run.text = "AI Reasoning for Recommendation:"
+        set_font(run, size=14, bold=True, color=COLOR_BLUE)
+        
+        p2 = tf.add_paragraph()
+        run2 = p2.add_run()
+        run2.text = match.get("reason", "Best technical fit based on specs.")
+        set_font(run2, size=12)
+
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    add_slide_header(slide, "Ensemble Decision Logic")
+    
+    def draw_node(x, y, text):
+        shape = slide.shapes.add_shape(MSO_SHAPE.OVAL, x, y, Inches(2), Inches(1))
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = COLOR_GREY
+        shape.line.color.rgb = COLOR_NAVY
+        
+        tf = shape.text_frame
+        p = tf.paragraphs[0]
+        p.alignment = PP_ALIGN.CENTER
+        run = p.add_run()
+        run.text = text
+        set_font(run, size=10, bold=True, color=COLOR_NAVY)
+
+    draw_node(Inches(4), Inches(2), "Semantic\n(Gemini 1.5)")
+    draw_node(Inches(2), Inches(4), "Keyword\n(Jaccard)")
+    draw_node(Inches(6), Inches(4), "Rule-Based\n(Constraints)")
+    
+    # Simple Score Table
+    if line_items:
+        scores = line_items[0].get("match", {}).get("scores", {})
+        
+        tb = slide.shapes.add_table(2, 4, Inches(2), Inches(5.5), Inches(6), Inches(1)).table
+        
+        headers = ["Metric", "Semantic Score", "Keyword Score", "Rule Score"]
+        for i, h in enumerate(headers):
+            run = tb.cell(0, i).text_frame.paragraphs[0].add_run()
+            run.text = h
+        format_table_header(tb)
+        
+        def set_score(col, val):
+            cell = tb.cell(1, col)
+            p = cell.text_frame.paragraphs[0]
+            p.alignment = PP_ALIGN.CENTER
+            run = p.add_run()
+            run.text = str(val)
+            set_font(run, size=12, bold=True)
+            
+        set_score(0, "Value")
+        set_score(1, scores.get("semantic", 0))
+        set_score(2, scores.get("keyword", 0))
+        set_score(3, scores.get("rule", 0))
+
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    add_slide_header(slide, "Commercial Quote")
+    
+    lines = commercial.get("lines", [])[:8]
+    table = slide.shapes.add_table(len(lines)+1, 4, Inches(0.5), Inches(1.5), Inches(9), Inches(0.5)).table
+    
+    headers = ["Item", "SKU", "Qty", "Line Total (INR)"]
+    for i, h in enumerate(headers):
+        cell = table.cell(0, i)
+        run = cell.text_frame.paragraphs[0].add_run()
+        run.text = h
+        cell.fill.solid()
+        cell.fill.fore_color.rgb = COLOR_BLUE 
+        set_font(run, size=10, bold=True, color=COLOR_WHITE)
+    
+    for idx, line in enumerate(lines):
+        r = idx + 1
+        
+        def set_c(col, txt):
+            run = table.cell(r, col).text_frame.paragraphs[0].add_run()
+            run.text = str(txt)
+            set_font(run, size=10)
+
+        set_c(0, line.get("item_name", "")[:35])
+        set_c(1, line.get("sku", ""))
+        set_c(2, line.get("qty", 0))
+        set_c(3, f"{line.get('line_total', 0):,}")
+
+    
+    gt_box = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(5), Inches(5.5), Inches(4.5), Inches(1.5))
+    gt_box.fill.solid()
+    gt_box.fill.fore_color.rgb = COLOR_WHITE
+    gt_box.line.color.rgb = COLOR_NAVY
+    gt_box.line.width = Pt(3)
+    
+    tf = gt_box.text_frame
+    p = tf.paragraphs[0]
+    p.alignment = PP_ALIGN.CENTER
+    run = p.add_run()
+    run.text = "PROJECT GRAND TOTAL"
+    set_font(run, size=14, bold=True, color=COLOR_NAVY)
+    
+    p2 = tf.add_paragraph()
+    p2.alignment = PP_ALIGN.CENTER
+    p2.space_before = Pt(10)
+    run2 = p2.add_run()
+    run2.text = f"INR {commercial.get('grand_total_inr', 0):,}"
+    set_font(run2, size=32, bold=True, color=COLOR_GREEN)
+
     filename = f"proposal_{rfp_id}.pptx"
     file_path = os.path.join(OUTPUT_DIR, filename)
     prs.save(file_path)

@@ -559,12 +559,19 @@ const RfpDetail = () => {
               )}
 
               {/* === TAB 3: PRICING (Invoice) === */}
+              {/* === TAB 3: PRICING (Commercials) === */}
               {activeTab === 'pricing' && (
                 <NeoCard>
-                  <h3 className="text-2xl font-black border-b-4 border-black pb-2 mb-6">Commercial Quote</h3>
+                  <div className="flex justify-between items-end border-b-4 border-black pb-2 mb-6">
+                      <h3 className="text-2xl font-black">Commercial Quote</h3>
+                      {commercial.lines && <span className="font-mono text-sm bg-gray-200 px-2">Currency: INR</span>}
+                  </div>
+                  
                   {commercial.lines ? (
                       <div>
-                          <div className="overflow-x-auto">
+                          {/* SECTION A: PRODUCTS */}
+                          <h4 className="font-bold text-sm uppercase text-gray-500 mb-2">A. Material Supply</h4>
+                          <div className="overflow-x-auto mb-8">
                               <table className="w-full border-2 border-black text-sm">
                                   <thead className="bg-black text-white">
                                       <tr>
@@ -572,13 +579,13 @@ const RfpDetail = () => {
                                           <th className="p-3 text-left">Matched SKU</th>
                                           <th className="p-3 text-right">Qty</th>
                                           <th className="p-3 text-right">Unit Price</th>
-                                          <th className="p-3 text-right">Line Total (Inc. Tax)</th>
+                                          <th className="p-3 text-right">Line Total</th>
                                       </tr>
                                   </thead>
                                   <tbody>
                                       {commercial.lines.map((line, i) => (
                                           <tr key={i} className="border-b border-gray-300">
-                                              <td className="p-3 font-bold">{line.item_name}</td>
+                                              <td className="p-3 font-bold max-w-[200px] truncate" title={line.item_name}>{line.item_name}</td>
                                               <td className="p-3 font-mono text-gray-600">{line.sku}</td>
                                               <td className="p-3 text-right">{line.qty}</td>
                                               <td className="p-3 text-right">₹ {line.unit_price}</td>
@@ -588,14 +595,54 @@ const RfpDetail = () => {
                                   </tbody>
                               </table>
                           </div>
-                          <div className="flex justify-end mt-6">
-                              <div className="bg-[#FFD700] p-6 border-4 border-black text-right">
-                                  <span className="block text-sm font-bold uppercase">Grand Total (INR)</span>
-                                  <span className="block text-4xl font-black">₹ {commercial.grand_total_inr}</span>
+
+                          {/* SECTION B: SERVICES (NEW) */}
+                          <h4 className="font-bold text-sm uppercase text-gray-500 mb-2">B. Testing & Acceptance Services</h4>
+                          {commercial.services && commercial.services.length > 0 ? (
+                             <div className="overflow-x-auto mb-8">
+                                <table className="w-full border-2 border-black text-sm bg-blue-50">
+                                    <thead className="bg-blue-900 text-white">
+                                        <tr>
+                                            <th className="p-3 text-left">Required Test / Service</th>
+                                            <th className="p-3 text-left">Rate Card Match</th>
+                                            <th className="p-3 text-right">Cost</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {commercial.services.map((s, i) => (
+                                            <tr key={i} className="border-b border-blue-200 text-blue-900">
+                                                <td className="p-3 font-bold">{s.test_name}</td>
+                                                <td className="p-3 font-mono text-xs opacity-70">{s.matched_service}</td>
+                                                <td className="p-3 text-right font-bold">₹ {s.cost}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                             </div>
+                          ) : (
+                             <div className="p-4 border-2 border-dashed border-gray-300 text-gray-400 mb-8 italic">
+                                No specific billable tests identified in this tender.
+                             </div>
+                          )}
+
+                          {/* GRAND TOTAL BLOCK */}
+                          <div className="flex flex-col items-end gap-3 mt-6 pt-6 border-t-2 border-gray-200">
+                              <div className="text-right text-sm font-mono text-gray-600 space-y-1">
+                                  <p>Material Subtotal: <span className="font-bold text-black">₹ {commercial.product_total || 0}</span></p>
+                                  <p>Services Subtotal: <span className="font-bold text-black">₹ {commercial.service_total || 0}</span></p>
+                              </div>
+                              <div className="bg-[#FFD700] p-6 border-4 border-black text-right shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] min-w-[320px]">
+                                  <span className="block text-sm font-bold uppercase tracking-widest">Total Project Value</span>
+                                  <span className="block text-4xl font-black mt-1">₹ {commercial.grand_total_inr}</span>
                               </div>
                           </div>
                       </div>
-                  ) : <div className="text-center py-10 font-bold text-gray-400">Waiting for Pricing Agent...</div>}
+                  ) : (
+                    <div className="text-center py-10">
+                        <DollarSign className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+                        <p className="font-bold text-gray-500">Waiting for Pricing Agent...</p>
+                    </div>
+                  )}
                 </NeoCard>
               )}
               {/* === TAB 4: CHAT ASSISTANT === */}
@@ -677,7 +724,6 @@ const UploadPage = () => {
 
     setLoading(true);
     try {
-      // Create FormData for file upload
       const data = new FormData();
       data.append('file', formData.file);
       data.append('title', formData.title);
@@ -688,7 +734,7 @@ const UploadPage = () => {
       
       if (res.status === 'success') {
         alert("✅ Upload Successful! Redirecting to Pipeline...");
-        navigate(`/rfps/${res.rfp_id}`); // Go straight to the detail page to run agents
+        navigate(`/rfps/${res.rfp_id}`); 
       }
     } catch (err) {
       alert("Upload Failed. Check console.");

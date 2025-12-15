@@ -49,27 +49,34 @@ def analyze_rfp_technical(rfp_id: int, db: Session):
     
     extraction_prompt = ChatPromptTemplate.from_messages([
         ("system", """You are an expert technical estimator. Analyze the tender document.
-        Extract the 'Bill of Quantities' or 'Scope of Supply'.
-        Return a JSON LIST of items. For each item, extract:
-        - item_name (e.g., 'Epoxy Primer')
-        - specs (summary of dft, color, material)
-        - quantity (if mentioned, else '1')
+        
+        TASK 1: Extract the 'Bill of Quantities' or 'Scope of Supply'.
+        TASK 2: Extract 'Testing & Acceptance Requirements' (e.g., Type Test, Routine Test, Third Party Inspection).
+        
+        Return a JSON Object with two keys: "items" and "tests".
         
         Example JSON:
-        [
-          {{ "item_name": "Anticorrosive Primer", "specs": "Zinc phosphate epoxy, 50 microns", "quantity": "500 L" }},
-          {{ "item_name": "PU Topcoat", "specs": "High gloss, UV resistant", "quantity": "200 L" }}
-        ]"""),
+        {{
+          "items": [
+             {{ "item_name": "Anticorrosive Primer", "specs": "...", "quantity": "500 L" }}
+          ],
+          "tests": ["Salt Spray Test", "High Voltage Test", "Third Party Inspection"]
+        }}
+        """),
         ("user", "{text}")
     ])
     
     try:
         chain = extraction_prompt | llm
         response = chain.invoke({"text": rfp_text[:15000]})
-        items_list = json.loads(clean_json_string(response.content))
+        raw_data = json.loads(clean_json_string(response.content))
         
-        if not isinstance(items_list, list):
-            items_list = [items_list]
+        # Handle formatting safety
+        items_list = raw_data.get("items", [])
+        extracted_tests = raw_data.get("tests", [])
+        
+        if not isinstance(items_list, list): items_list = [items_list]
+        if not isinstance(extracted_tests, list): extracted_tests = [str(extracted_tests)]
             
     except Exception as e:
         return {"error": f"Extraction failed: {str(e)}"}
@@ -135,6 +142,7 @@ def analyze_rfp_technical(rfp_id: int, db: Session):
 
     rfp.extracted_data = {
         "line_items": line_items_result,
+        "required_tests": extracted_tests, 
         "mode": "multi_sku"
     }
     rfp.status = "Processed"
