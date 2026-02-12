@@ -1,4 +1,4 @@
-# 🚀 BidWin AI: Agentic RFP Response Automation
+# BidWin AI: Agentic RFP Response Automation
 
 > **Transforming B2B Tender Responses from 7 Days to < 5 Minutes.**
 
@@ -10,14 +10,14 @@
 
 ---
 
-## 🏢 The Problem
+## The Problem
 Large industrial firms face a critical bottleneck: **Speed vs. Accuracy**.
 *   **Manual Discovery:** Sales teams miss tenders due to manual portal checks.
 *   **Technical bottlenecks:** Mapping vague RFP requirements to thousands of internal SKUs requires senior engineering time.
 *   **Pricing Complexity:** Estimating logistics, margins, taxes, and mandatory testing costs creates delays.
 *   **Result:** 39% of RFPs are missed or responded to too late.
 
-## 💡 The Solution
+## The Solution
 BidWin AI replaces sequential manual handoffs with **Parallel Autonomous Agents**:
 1.  **Sales Agent:** Scans portals & creates a pipeline.
 2.  **Technical Agent:** Extracts Bill of Quantities (BoQ) & matches SKUs using an Ensemble Engine.
@@ -26,24 +26,24 @@ BidWin AI replaces sequential manual handoffs with **Parallel Autonomous Agents*
 
 ---
 
-## ✨ Key Features (The "Wow" Factor)
+## Key Features (The "Wow" Factor)
 
-### 🧠 1. Multi-SKU Ensemble Decision Engine
+###  1. Multi-SKU Ensemble Decision Engine
 Unlike simple AI wrappers, our Technical Agent uses a **Weighted Voting System** to ensure 99% matching accuracy:
 *   **Semantic Judge (50%):** Uses Gemini 1.5 Flash to understand context (e.g., "Anti-corrosive" = "Epoxy").
 *   **Keyword Judge (30%):** Uses **Jaccard Similarity algorithms** to calculate exact spec overlap.
 *   **Rule Judge (20%):** deterministic logic checks for hard constraints.
 
-### ⚡ 2. Autonomous Orchestration (n8n)
+### 2. Autonomous Orchestration (n8n)
 *   **Auto-Pilot Mode:** A single click triggers an **n8n workflow** that chains all agents (`Technical -> Pricing -> Proposal`) automatically.
 *   **Real-Time Sync:** The dashboard visualizes the pipeline progress live via short-polling.
 
-### 💬 3. Context-Aware Hybrid RAG
+###  3. Context-Aware Hybrid RAG
 *   **Dual-Brain Assistant:** Users can chat with the RFP. The AI answers using **Two Context Sources**:
     1.  **The PDF:** For legal clauses, penalties, and scope.
     2.  **The Database:** For calculated margins, profit analysis, and SKU reasoning.
 
-### 💰 4. Enterprise Commercials
+###  4. Enterprise Commercials
 *   Generates a full **Bill of Quantities (BoQ)**.
 *   Calculates **Material Costs** (Base + Logistics + GST).
 *   Calculates **Service Costs** (Type Tests, FAT, Inspections) based on extracted requirements.
@@ -61,7 +61,7 @@ Unlike simple AI wrappers, our Technical Agent uses a **Weighted Voting System**
 
 
 
-## 🛠️ Technology Stack
+##  Technology Stack
 
 | Component | Tech Used | Description |
 | :--- | :--- | :--- |
@@ -74,7 +74,7 @@ Unlike simple AI wrappers, our Technical Agent uses a **Weighted Voting System**
 
 ---
 
-## 🚀 Installation & Setup
+##  Installation & Setup
 
 ### Prerequisites
 *   Docker & Docker Compose installed.
@@ -115,7 +115,7 @@ docker-compose up --build
 
 ---
 
-## 🎥 Usage Guide (Demo Script)
+##  Usage Guide (Demo Script)
 
 1.  **Ingestion:**
     *   Click **"Trigger Sales Scan"** to find mock RFPs from the simulated portal.
@@ -134,7 +134,7 @@ docker-compose up --build
 
 ---
 
-## 📂 Project Structure
+##  Project Structure
 
 ```text
 bidwin-ai/
@@ -156,7 +156,7 @@ bidwin-ai/
 
 ---
 
-## 🏆 Innovation vs. Traditional RAG
+##  Innovation vs. Traditional RAG
 
 | Feature | Standard RAG Tool | BidWin AI |
 | :--- | :--- | :--- |
@@ -167,6 +167,6 @@ bidwin-ai/
 
 ---
 
-## 🤝 Contributors
+## Contributors
 *   **Team BidWin**
 *   Built for **EY Techathon 6.0**
